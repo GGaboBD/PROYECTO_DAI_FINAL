@@ -1,41 +1,108 @@
 from flask import jsonify, Blueprint, request
-from Entidades.sucursal import sucursales
+from DataBase.db_paciente import (
+    obtener_pacientes,
+    obtener_paciente_por_id,
+    insertar_paciente,
+    actualizar_paciente,
+    eliminar_paciente
+)
 
-paciente_bp = Blueprint('paciente', __name__)
+pacientes_bp = Blueprint('pacientes', __name__)
 
-pacientes = {
-    501: {"id": 501, "nombre_paciente": "Carlo", "dui_paciente": "12345678-9", "telefono": "8923-1232", "id_sucursal": sucursales[201]["id"]}
-}
 
-@paciente_bp.get("/paciente")
+
+# ---------------------------------------------------------
+# 1. OBTENER TODOS LOS PACIENTES (GET)
+# ---------------------------------------------------------
+
+@pacientes_bp.get("/pacientes")
 def mostrar_pacientes():
-    return jsonify(list(pacientes.values()))
+    pacientes = obtener_pacientes()
+    return jsonify(pacientes), 200
 
-@paciente_bp.get("/paciente/<int:id>")
+
+
+# ---------------------------------------------------------
+# 2. OBTENER PACIANTE POR ID (GET)
+# ---------------------------------------------------------
+
+@pacientes_bp.get("/pacientes/<int:id>")
 def obtener_paciente(id):
-    paciente = pacientes.get(id)
+    paciente = obtener_paciente_por_id(id)
 
     if paciente:
-        return jsonify(paciente)
-    return jsonify({"error": "Este paciente no ha sido registrado en el sistema"})
+        return jsonify(paciente), 200
+    return jsonify({"error": f"El paciente con ID {id} no ha sido encontrado"}), 404
 
-@paciente_bp.post("/paciente")
-def agregar_paciente():
+
+
+# ---------------------------------------------------------
+# 3. CREAR NUEVO PACIENTE (POST)
+# ---------------------------------------------------------
+
+@pacientes_bp.post("/pacientes")
+def crear_paciente():
     datos = request.get_json()
-
     if not datos:
-        return jsonify({"error": "Debe enviar informacion sobre el paciente"})
-    if "nombre_paciente" not in datos or "dui_paciente" not in datos or "telefono" not in datos or "id_sucursal" not in datos:
-        return jsonify({"error": "Los campos: nombre_paciente, dui_paciente, telefono y id_sucursal son requeridos para el registro"})
-    
-    nuevo_id = max(pacientes.keys()) + 1
+        return jsonify({"error": "Debe enviar información sobre el paciente"}), 400
 
-    pacientes[nuevo_id] = {
-        "id": nuevo_id,
+    campos_requeridos = ["nombre_paciente", "dui_paciente", "telefono", "id_sucursal"]
+    if not all(campo in datos for campo in campos_requeridos):
+        return jsonify({
+            "error": "Los campos nombre_paciente, dui_paciente, telefono e id_sucursal son requeridos"
+        }), 400
+
+    nuevo_paciente = {
         "nombre_paciente": datos["nombre_paciente"],
         "dui_paciente": datos["dui_paciente"],
         "telefono": datos["telefono"],
         "id_sucursal": datos["id_sucursal"]
     }
+    
+    resultado = insertar_paciente(nuevo_paciente)
 
-    return jsonify(pacientes[nuevo_id]), 201
+    return jsonify(resultado), 201
+
+
+
+# ---------------------------------------------------------
+# 4. ACTUALIZAR PACIENTE (PUT)
+# ---------------------------------------------------------
+
+@pacientes_bp.put("/pacientes/<int:id>")
+def actualizar(id):
+    paciente_existente = obtener_paciente_por_id(id)
+    if not paciente_existente:
+        return jsonify({"error": f"El paciente con ID {id} no existe"}), 404
+
+    cambios = request.get_json()
+    if not cambios:
+        return jsonify({"error": "Debe enviar información para actualizar"}), 400
+
+    resultado = actualizar_paciente(id, cambios)
+    return jsonify(resultado), 200
+
+
+
+# ---------------------------------------------------------
+# 5. ELIMINAR PACIENTE (DELETE)
+# ---------------------------------------------------------
+
+@pacientes_bp.delete("/pacientes/<int:id>")
+def eliminar(id):
+    paciente_existente = obtener_paciente_por_id(id)
+    if not paciente_existente:
+        return jsonify({"error": f"El paciente con ID {id} no existe"}), 404
+
+    resultado = eliminar_paciente(id)
+    return jsonify({"mensaje": f"Paciente con ID {id} eliminado correctamente", "datos": resultado}), 200
+
+
+
+# ---------------------------------------------------------
+# 6. MANEJO GLOBAL DE ERRORES
+# ---------------------------------------------------------
+
+@pacientes_bp.app_errorhandler(Exception)
+def manejar_error(error):
+    return jsonify({"error": str(error)}), 500

@@ -1,39 +1,104 @@
 from flask import jsonify, Blueprint, request
+from DataBase.db_sucursal import (
+    obtener_sucursales,
+    obtener_sucursal_por_id,
+    insertar_sucursal,
+    actualizar_sucursal,
+    eliminar_sucursal
+)
 
-sucursal_bp = Blueprint('sucursal', __name__)
+sucursales_bp = Blueprint('sucursales', __name__)
 
-sucursales = {
-    201: {"id": 201, "nombre": "Alvincito Dental", "direccion": "Soyapango", "telefono": "8732-9122"}
-}
 
-@sucursal_bp.get("/sucursal")
+
+# ---------------------------------------------------------
+# 1. OBTENER TODAS LAS SUCURSALES (GET)
+# ---------------------------------------------------------
+
+@sucursales_bp.get("/sucursales")
 def mostrar_sucursales():
-    return jsonify(list(sucursales.values()))
+    sucursales = obtener_sucursales()
+    return jsonify(sucursales), 200
 
-@sucursal_bp.get("/sucursal/<int:id>")
+
+
+# ---------------------------------------------------------
+# 2. OBTENER SUCURSAL POR ID (GET)
+# ---------------------------------------------------------
+
+@sucursales_bp.get("/sucursales/<int:id>")
 def obtener_sucursal(id):
-    sucursal = sucursales.get(id)
+    sucursal = obtener_sucursal_por_id(id)
 
     if sucursal:
-        return jsonify(sucursal)
-    return jsonify({"error": "Esta sucursal no se ha encontrado"})
+        return jsonify(sucursal), 200
+    return jsonify({"error": f"La sucursal con ID {id} no ha sido encontrada"}), 404
 
-@sucursal_bp.post("/sucursal")
-def agregar_sucursal():
+
+
+# ---------------------------------------------------------
+# 3. CREAR NUEVA SUCURSAL (POST)
+# ---------------------------------------------------------
+
+@sucursales_bp.post("/sucursales")
+def crear_sucursal():
     datos = request.get_json()
-
     if not datos:
-        return jsonify({"error": "Debe enviar informacion sobre la sucursal"})
-    if "nombre" not in datos or "direccion" not in datos or "telefono" not in datos:
-        return jsonify({"error": "Los campos de nombre, direccion y telefono son requeridos en el registro"})
-    
-    nuevo_id = max(sucursales.keys()) + 1
+        return jsonify({"error": "Debe enviar información sobre la sucursal"}), 400
 
-    sucursales[nuevo_id] = {
-        "id": nuevo_id,
+    campos_requeridos = ["nombre", "direccion", "telefono"]
+    if not all(campo in datos for campo in campos_requeridos):
+        return jsonify({"error": "Los campos nombre, direccion y telefono son requeridos"}), 400
+
+    nueva_sucursal = {
         "nombre": datos["nombre"],
         "direccion": datos["direccion"],
         "telefono": datos["telefono"]
     }
+    
+    resultado = insertar_sucursal(nueva_sucursal)
 
-    return jsonify(sucursales[nuevo_id]), 201
+    return jsonify(resultado), 201
+
+
+
+# ---------------------------------------------------------
+# 4. ACTUALIZAR SUCURSAL (PUT)
+# ---------------------------------------------------------
+
+@sucursales_bp.put("/sucursales/<int:id>")
+def actualizar(id):
+    sucursal_existente = obtener_sucursal_por_id(id)
+    if not sucursal_existente:
+        return jsonify({"error": f"La sucursal con ID {id} no existe"}), 404
+
+    cambios = request.get_json()
+    if not cambios:
+        return jsonify({"error": "Debe enviar información para actualizar"}), 400
+
+    resultado = actualizar_sucursal(id, cambios)
+    return jsonify(resultado), 200
+
+
+
+# ---------------------------------------------------------
+# 5. ELIMINAR SUCURSAL (DELETE)
+# ---------------------------------------------------------
+
+@sucursales_bp.delete("/sucursales/<int:id>")
+def eliminar(id):
+    sucursal_existente = obtener_sucursal_por_id(id)
+    if not sucursal_existente:
+        return jsonify({"error": f"La sucursal con ID {id} no existe"}), 404
+
+    resultado = eliminar_sucursal(id)
+    return jsonify({"mensaje": f"Sucursal con ID {id} eliminada correctamente", "datos": resultado}), 200
+
+
+
+# ---------------------------------------------------------
+# 6. MANEJO GLOBAL DE ERRORES
+# ---------------------------------------------------------
+@sucursales_bp.app_errorhandler(Exception)
+def manejar_error(error):
+    return jsonify({"error": str(error)}), 500
